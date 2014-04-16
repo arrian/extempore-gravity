@@ -1,0 +1,254 @@
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;Vector2
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(bind-alias vec2 <float,float>)
+
+(bind-func vec2_create
+  (lambda (x:float y:float)
+    (let ((v:vec2* (halloc)))
+    	(tfill! v x y)
+    	v)))
+
+(bind-func vec2_destroy
+  (lambda (v:vec2*)
+    (free v)
+    void))
+
+(bind-func vec2_get_x
+  (lambda (v:vec2*)
+    (tref v 0)))
+
+(bind-func vec2_get_y
+  (lambda (v:vec2*)
+    (tref v 1)))
+
+(bind-func vec2_set_x
+  (lambda (v:vec2* x:float)
+    (tset! v 0 x)))
+
+(bind-func vec2_set_y
+  (lambda (v:vec2* y:float)
+    (tset! v 1 y)))
+
+(bind-func vec2_add
+  (lambda (v1:vec2* v2:vec2* result:vec2*)
+    (vec2_set_x result (+ (vec2_get_x v1) (vec2_get_x v2)))
+    (vec2_set_y result (+ (vec2_get_y v1) (vec2_get_y v2)))
+    void))
+
+(bind-func vec2_sub
+  (lambda (v1:vec2* v2:vec2* result:vec2*)
+    (vec2_set_x result (- (vec2_get_x v1) (vec2_get_x v2)))
+    (vec2_set_y result (- (vec2_get_y v1) (vec2_get_y v2)))
+    void))
+
+(bind-func vec2_scale
+  (lambda (v:vec2* scale:float result:vec2*)
+    (vec2_set_x result (* (vec2_get_x v) scale))
+    (vec2_set_y result (* (vec2_get_y v) scale))
+    void))
+
+(bind-func vec2_dot_product
+  (lambda (v1:vec2* v2:vec2*)
+    (+ (* (vec2_get_x v1) (vec2_get_x v2)) (* (vec2_get_y v1) (vec2_get_y v2)))))
+
+;; (bind-func vec2_cross_product
+;;   (lambda (v1:vec2* v2:vec2* result:vec2*)
+;;     ))
+
+(bind-func vec2_length
+  (lambda (v:vec2*)
+    (sqrt (+ (pow (vec2_get_x v) 2.0) (pow (vec2_get_y v) 2.0)))))
+
+(bind-func vec2_unit
+  (lambda (v:vec2* result:vec2*)
+  	(let ((length:float (vec2_length v)))
+  		(vec2_set_x result (/ (vec2_get_x v) length))
+  		(vec2_set_y result (/ (vec2_get_y v) length))
+  		void)))
+
+(bind-func vec2_distance
+  (lambda (v1:vec2* v2:vec2*)
+    (let ((res:vec2* (salloc)))
+    	(vec2_sub v2 v1 res)
+    	(vec2_length res))))
+
+;; (bind-func vec2_angle
+;;   (lambda (v1:vec2* v2:vec2*)
+;;     ))
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;Gravity
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(bind-val g float 9.81)
+
+(bind-alias grav <vec2*,vec2*,float,float>);<position,velocity,mass,size>
+
+(bind-func grav_create
+  (lambda (position:vec2* velocity:vec2* mass:float size:float)
+  	(let ((grav:<vec2*,vec2*,float,float>* (halloc)))
+  		(tfill! grav position velocity mass size)
+  		grav)))
+
+(bind-func grav_destroy
+  (lambda (grav:grav*)
+    (free grav)
+    void))
+
+(bind-func grav_get_position
+  (lambda (grav:grav*)
+    (tref grav 0)))
+
+(bind-func grav_get_velocity
+  (lambda (grav:grav*)
+    (tref grav 1)))
+
+(bind-func grav_get_mass
+  (lambda (grav:grav*)
+    (tref grav 2)))
+
+(bind-func grav_set_position
+  (lambda (grav:grav* position:vec2*)
+    (tset! grav 0 position)))
+
+(bind-func grav_set_velocity
+  (lambda (grav:grav* velocity:vec2*)
+    (tset! grav 1 velocity)))
+
+(bind-func grav_set_mass
+  (lambda (grav:grav* mass:float)
+    (tset! grav 2 mass)))
+
+(bind-func grav_calc_gravity
+  (lambda (g1:grav* g2:grav*)
+    	(let ((d:float (vec2_distance (grav_get_position g1) (grav_get_position g2))))
+    		(/ (* g (* (grav_get_mass g1) (grav_get_mass g2))) (pow d 2.0)))))
+
+(bind-func grav_add_force
+  (lambda (g:grav* force:vec2* dt:float)
+  	(let ((res:vec2* (salloc))
+  		  (g_velocity (grav_get_velocity g)))
+  			(vec2_scale force (/ 1.0 (grav_get_mass g)) res)
+  			(vec2_scale res dt res)
+  			(vec2_sub g_velocity res g_velocity);;;;;changed from add
+  			void)))
+
+(bind-func grav_step
+  (lambda (g_small:grav* g_large:grav* dt:float)
+    (let ((gravitation:float (grav_calc_gravity g_small g_large))
+    	  (force:vec2* (salloc))
+    	  (pos_change:vec2* (salloc)))
+    	(vec2_sub (grav_get_position g_small) (grav_get_position g_large) force)
+    	(vec2_unit force force)
+    	(vec2_scale force gravitation force)
+    	(grav_add_force g_small force dt)
+    	(vec2_add (grav_get_position g_small) (grav_get_velocity g_small) pos_change)
+    	(vec2_scale pos_change dt pos_change)
+    	(vec2_add (grav_get_position g_small) pos_change (grav_get_position g_small))
+    	void)))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;Gravity Array
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(bind-val GRAV_ARRAY_COUNT i32 10)
+(bind-val GRAV_ARRAY |10,grav*|* (zalloc))
+
+(bind-func grav_create_array
+  (lambda ()
+    (let ((i 0))
+    	(dotimes (i GRAV_ARRAY_COUNT)
+    	  	(aset! GRAV_ARRAY i (grav_create (vec2_create (i32tof (+ 10 (* i 50))) (i32tof (+ 10 (* i 50)))) (vec2_create (* (random 0.0 60.0) 2000.0) 0.0) 10000000000.0 10.0))))))
+
+(grav_create_array)
+
+(bind-func grav_get_array_value
+  (lambda (index:i32)
+  		(aref GRAV_ARRAY index)
+    ))
+
+(bind-val SUN grav* (grav_create (vec2_create 500.0 450.0) (vec2_create 0.0 0.0) 100000000000.0 30.0))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;Drawing
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(bind-func draw_circle
+  (lambda (xcentre:float ycentre:float size:float)
+    (xtm_draw_ellipsef (- xcentre (/ size 2.0)) (- ycentre (/ size 2.0)) size size)))
+
+
+
+(define fullscreen #f)
+
+(define width 1024.0)
+(define height 768.0)
+(bind-val width float width)
+(bind-val height float height)
+
+(define *gl-ctx* (gl:make-ctx ":0.0" fullscreen 0.0 0.0 width height))
+
+(xtm_render_setup width height)
+(if (<> (xtm-vg-create-context width height) 1) (xtm_vg_print_error))
+
+(bind-func gl_render
+  (lambda (time:float dt:float)
+    (let ((stroke (vgCreatePaint))
+          (fill (vgCreatePaint))
+          (i:i32 0)
+          (j:i32 0))
+		(xtm_vg_reset_matrices)
+		(xtm_vg_clear 0.0 0.0 0.0 1.0 (ftoi32 width) (ftoi32 height))
+		;;(xtm_paint_setup_stroke stroke (dtof 0.5) (dtof 0.6) 0.2 0.5 0.0)
+		(xtm_paint_setup_fill fill (random 1.0) (random 1.0) (random 1.0) 1.0)
+		(draw_circle 500.0 450.0 30.0)
+        (dotimes (i GRAV_ARRAY_COUNT)
+        	;;(dotimes (j GRAV_ARRAY_COUNT)
+        		;;(if (<> i j) 
+        			(grav_step (grav_get_array_value i) SUN 0.00001)
+        			;;)
+    ;;     		(if (> (vec2_get_x (grav_get_position (grav_get_array_value i))) width)
+    ;;     			(let ((vel:vec2* (grav_get_velocity (grav_get_array_value i))))
+    ;;     					(vec2_set_x vel (* -1.0 (vec2_get_x vel)))
+    ;;     				))
+    ;;     		(if (> (vec2_get_y (grav_get_position (grav_get_array_value i))) height)
+    ;;     			(let ((vel:vec2* (grav_get_velocity (grav_get_array_value i))))
+    ;;     					(vec2_set_y vel (* -1.0 (vec2_get_y vel)))
+    ;;     				))
+				;; (if (< (vec2_get_x (grav_get_position (grav_get_array_value i))) 0.0)
+    ;;     			(let ((vel:vec2* (grav_get_velocity (grav_get_array_value i))))
+    ;;     					(vec2_set_x vel (* -1.0 (vec2_get_x vel)))
+    ;;     				))
+				;; (if (< (vec2_get_y (grav_get_position (grav_get_array_value i))) 0.0)
+    ;;     			(let ((vel:vec2* (grav_get_velocity (grav_get_array_value i))))
+    ;;     					(vec2_set_y vel (* -1.0 (vec2_get_y vel)))
+    ;;     				))
+        	;;	)
+			(let ((pos:vec2* (grav_get_position (grav_get_array_value i))))
+				(draw_circle (vec2_get_x pos) (vec2_get_y pos) 10.0)))
+		(xtm_destroy_paint fill)
+		(xtm_destroy_paint stroke)
+    void)))
+
+(define update
+  (lambda (time dt)
+    (begin
+        (gl_render time dt)
+        (gl:swap-buffers *gl-ctx*))
+    (callback (*metro* (+ time dt)) 'update (+ time dt)
+              dt)))
+
+(update (*metro* 'get-beat 1.0) 1/32)
+
+;;(grav_step (grav_get_array_value 4) (grav_get_array_value 8) 0.01)
+
+
+
